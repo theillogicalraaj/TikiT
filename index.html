@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Tiki Topple - Draft Edition</title>
+    <title>Tiki Topple - Final Hackathon Build</title>
     
     <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
 
@@ -13,8 +13,8 @@
             --stone-med: #2d3748;
             --stone-light: #4a5568;
             --vine-green: #2f855a;
-            --accent-glow: #38bdf8;
-            --p2-color: #f56565;
+            --accent-glow: #38bdf8; /* Player 1 Color */
+            --p2-color: #f56565;    /* Player 2 Color */
             --gold-ruin: #d69e2e;
             --text-main: #e2e8f0;
             
@@ -104,19 +104,51 @@
         }
         .finish-line { background: rgba(214, 158, 46, 0.05); border-top: 4px solid var(--gold-ruin); box-shadow: inset 0 20px 30px rgba(214, 158, 46, 0.1); }
 
+        /* THINNER BLOCKS FOR COMPRESSION FIX */
         .tiki {
             width: 120px; height: 28px; position: absolute; left: 50%; margin-left: -60px; 
             border-radius: 4px; display: flex; justify-content: center; align-items: center;
             font-weight: 900; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 2px;
             box-shadow: 0 8px 15px rgba(0,0,0,0.9), inset 0 2px 4px rgba(255,255,255,0.4);
-            border: 2px solid rgba(0,0,0,0.9); color: white; text-shadow: 1px 1px 3px black;
+            border: 2px solid rgba(0,0,0,0.9); color: white; text-shadow: 1px 1px 3px black; cursor: pointer;
         }
 
+        /* STACK X-RAY TOOLTIP */
+        .tiki:hover {
+            z-index: 999 !important; 
+            filter: brightness(1.2);
+        }
+        
+        .tiki:hover::after {
+            content: attr(data-pos);
+            position: absolute;
+            bottom: 120%; 
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.95);
+            color: #e2e8f0;
+            padding: 10px 15px;
+            border-radius: 8px;
+            font-size: 0.9rem;
+            font-weight: bold;
+            white-space: pre; /* Allows line breaks */
+            text-align: left;
+            border: 1px solid var(--accent-glow);
+            box-shadow: 0 10px 30px rgba(0,0,0,1);
+            pointer-events: none; 
+            text-shadow: none;
+            letter-spacing: 1px;
+            line-height: 1.5;
+        }
+
+        /* CONTROLS AREA */
         .controls { width: 380px; display: flex; flex-direction: column; gap: 20px; transform: translateZ(40px); }
         .panel-box {
             background: rgba(26, 32, 44, 0.85); padding: 25px; border-radius: 12px;
-            border: 2px solid var(--stone-light); box-shadow: 0 20px 40px rgba(0,0,0,0.8);
+            border: 2px solid var(--accent-glow); /* Starts as P1 color */
+            box-shadow: 0 20px 40px rgba(0,0,0,0.8), inset 0 2px 20px rgba(56, 189, 248, 0.15);
             backdrop-filter: blur(10px);
+            transition: all 0.3s ease;
         }
         h2 { margin: 0 0 15px 0; color: var(--vine-green); text-transform: uppercase; font-size: 1.1rem;}
         
@@ -146,7 +178,7 @@
     <div id="start-screen" class="overlay">
         <div class="modal-box">
             <h1 class="title-text">Tiki Topple</h1>
-            <p style="color: #a0aec0; font-size: 1.3rem; margin-top: 0;">Ancient Jungle Protocol</p>
+            <p style="color: #a0aec0; font-size: 1.3rem; margin-top: 0;">Hackathon Master Build</p>
             <button class="btn-large" onclick="startDraft()">Start Game</button>
         </div>
     </div>
@@ -165,17 +197,17 @@
         <div class="board" id="board-ui"></div>
 
         <div class="controls">
-            <div class="panel-box" style="text-align: center; border-color: var(--gold-ruin);">
-                <div style="font-size: 1.5rem; font-weight: 900; color: var(--accent-glow);" id="active-player">Player 1</div>
+            <div class="panel-box" id="player-panel" style="text-align: center;">
+                <div style="font-size: 1.5rem; font-weight: 900; color: var(--accent-glow); transition: 0.3s;" id="active-player">Player 1</div>
                 <div style="background: var(--stone-dark); color: var(--gold-ruin); padding: 8px; border-radius: 6px; margin-top: 10px; font-weight: bold;" id="turn-counter">Turn: 1 / 10</div>
             </div>
 
-            <div class="panel-box">
+            <div class="panel-box controls-panel">
                 <h2>Target Stack Location</h2>
                 <select id="zone-select" onchange="SoundFX.playUI()"></select>
             </div>
 
-            <div class="panel-box">
+            <div class="panel-box controls-panel">
                 <h2>Move Forward (PDF 5.3.1)</h2>
                 <div class="btn-grid">
                     <button class="btn-action" onclick="SoundFX.playUI(); executeMove(1)">Top 1</button>
@@ -184,7 +216,7 @@
                 </div>
             </div>
 
-            <div class="panel-box">
+            <div class="panel-box controls-panel">
                 <h2>Reorder Stack (PDF 5.3.2)</h2>
                 <div class="btn-grid btn-grid-2">
                     <button class="btn-action btn-alt" onclick="SoundFX.playUI(); executeReorder(2)">Rev Top 2</button>
@@ -239,9 +271,8 @@
         let activePlayer = 1;
         let isAnimating = false;
 
-        // --- NEW: DRAFTING VARIABLES ---
-        let p1Team = []; // Holds P1's chosen names
-        let p2Team = []; // Holds P2's chosen names
+        let p1Team = []; 
+        let p2Team = []; 
         let draftingPlayer = 1;
 
         const allTokens = [
@@ -266,7 +297,6 @@
             const grid = document.getElementById('draft-grid');
             grid.innerHTML = '';
             
-            // Build the selection buttons
             allTokens.forEach(tiki => {
                 const btn = document.createElement('button');
                 btn.className = 'draft-btn';
@@ -281,20 +311,16 @@
             SoundFX.playUI();
             btn.disabled = true;
 
-            // Assign to current player
             if (draftingPlayer === 1) {
                 p1Team.push(tiki.name);
                 btn.style.borderColor = 'var(--accent-glow)';
                 
-                if (p1Team.length === 3) {
-                    draftingPlayer = 2; // Switch to P2
-                }
+                if (p1Team.length === 3) draftingPlayer = 2; 
             } else {
                 p2Team.push(tiki.name);
                 btn.style.borderColor = 'var(--p2-color)';
                 
                 if (p2Team.length === 3) {
-                    // Both teams selected, start game!
                     setTimeout(() => {
                         document.getElementById('draft-screen').classList.add('hidden');
                         initBoard();
@@ -303,7 +329,6 @@
                 }
             }
 
-            // Update Header Text
             const status = document.getElementById('draft-status');
             if (draftingPlayer === 1) {
                 status.innerText = `Player 1: Pick ${3 - p1Team.length}`;
@@ -340,7 +365,6 @@
                 el.className = 'tiki'; el.id = token.id;
                 el.style.backgroundColor = token.color; el.innerText = token.name;
                 
-                // Show tiny indicator if owned by a player
                 if(p1Team.includes(token.name)) el.style.border = "3px solid var(--accent-glow)";
                 if(p2Team.includes(token.name)) el.style.border = "3px solid var(--p2-color)";
 
@@ -352,14 +376,30 @@
 
         function renderPhysics(animate = true) {
             const zoneHeight = 750 / totalZones; 
-            const tokenHeight = 11; 
+            const tokenHeight = 11; // Tighter overlap
 
             boardState.forEach((stack, zoneIndex) => {
+                
+                // 🚨 STACK X-RAY TOOLTIP GENERATOR 🚨
+                let tooltipText = "";
+                let revStack = [...stack].reverse(); 
+                
+                if (revStack.length > 0) {
+                    tooltipText += "STACK ORDER:\n"; 
+                    for(let i = 0; i < Math.min(3, revStack.length); i++) {
+                        tooltipText += `Top ${i+1}: ${revStack[i].name}\n`;
+                    }
+                    if(revStack.length > 3) tooltipText += `...and ${revStack.length - 3} more hidden`;
+                }
+
                 stack.forEach((token, stackIndex) => {
                     const baseBottom = (zoneIndex * zoneHeight) + 6; 
                     const finalBottom = baseBottom + (stackIndex * tokenHeight);
                     const el = document.getElementById(token.id);
                     el.style.zIndex = stackIndex; 
+                    
+                    // Attach X-Ray string
+                    el.setAttribute('data-pos', tooltipText.trim());
 
                     if (animate) {
                         anime({ targets: el, bottom: finalBottom, duration: 800, easing: 'easeOutElastic(1, .6)', complete: function(anim) { if(anim.completed) SoundFX.playStoneThud(); } });
@@ -419,10 +459,24 @@
             if (activePlayer === 2) currentTurn++;
             if (currentTurn > maxTurns) return triggerGameOver("Time Limit Reached!");
 
+            // Swap Player
             activePlayer = activePlayer === 1 ? 2 : 1;
+            
+            // 🚨 VISUAL TURN LOCK (Panel Colors Change) 🚨
             const pText = document.getElementById('active-player');
             pText.innerText = `Player ${activePlayer}`;
-            pText.style.color = activePlayer === 1 ? 'var(--accent-glow)' : 'var(--p2-color)';
+            
+            let activeColor = activePlayer === 1 ? 'var(--accent-glow)' : 'var(--p2-color)';
+            let glowColor = activePlayer === 1 ? 'rgba(56, 189, 248, 0.15)' : 'rgba(245, 101, 101, 0.15)';
+            
+            pText.style.color = activeColor;
+            
+            // Update all the control boxes
+            document.querySelectorAll('.panel-box').forEach(box => {
+                box.style.borderColor = activeColor;
+                box.style.boxShadow = `0 20px 40px rgba(0,0,0,0.8), inset 0 2px 20px ${glowColor}`;
+            });
+
             document.getElementById('turn-counter').innerText = `Turn: ${currentTurn} / ${maxTurns}`;
             isAnimating = false;
         }
@@ -434,7 +488,6 @@
 
             let p1Score = 0; let p2Score = 0;
 
-            // Calculate score using the teams selected in the Draft Phase
             boardState.forEach((stack, zoneIndex) => {
                 stack.forEach((token, stackIndex) => {
                     let points = (zoneIndex * 10) + stackIndex + 1;
