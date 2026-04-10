@@ -1,0 +1,472 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tiki Topple - Draft Edition</title>
+    
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/animejs/3.2.1/anime.min.js"></script>
+
+    <style>
+        :root {
+            --stone-dark: #1a1c23;
+            --stone-med: #2d3748;
+            --stone-light: #4a5568;
+            --vine-green: #2f855a;
+            --accent-glow: #38bdf8;
+            --p2-color: #f56565;
+            --gold-ruin: #d69e2e;
+            --text-main: #e2e8f0;
+            
+            --rock-texture: repeating-linear-gradient(
+                45deg,
+                rgba(0,0,0,0.05) 0px, rgba(0,0,0,0.05) 2px,
+                transparent 2px, transparent 4px
+            ), linear-gradient(135deg, var(--stone-med) 0%, var(--stone-dark) 100%);
+        }
+
+        body {
+            font-family: 'Segoe UI', system-ui, sans-serif;
+            background: radial-gradient(circle at 50% 30%, #0f380f 0%, #041204 100%);
+            color: var(--text-main);
+            margin: 0;
+            height: 100vh;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            overflow: hidden;
+            perspective: 1200px;
+            background-color: #041204;
+        }
+
+        /* Cinematic Vignette */
+        body::after {
+            content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            box-shadow: inset 0 0 200px rgba(0,0,0,0.95); pointer-events: none; z-index: 9999;
+        }
+
+        /* --- OVERLAYS --- */
+        .overlay {
+            position: absolute; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(4, 18, 4, 0.95); backdrop-filter: blur(12px);
+            display: flex; justify-content: center; align-items: center; flex-direction: column;
+            z-index: 10000; transition: opacity 0.6s ease;
+        }
+        .hidden { opacity: 0; pointer-events: none; }
+
+        .modal-box {
+            background: var(--rock-texture); padding: 60px 80px; border-radius: 15px;
+            border: 5px solid var(--stone-light); box-shadow: 0 40px 80px rgba(0,0,0,1), inset 0 0 40px rgba(0,0,0,0.8);
+            text-align: center; transform: translateY(0) scale(1);
+            transition: all 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); position: relative;
+        }
+        .overlay.hidden .modal-box { transform: translateY(60px) scale(0.9); }
+
+        .title-text {
+            font-size: 4rem; margin: 0 0 10px 0; color: var(--gold-ruin);
+            text-transform: uppercase; letter-spacing: 10px;
+            text-shadow: 0 5px 15px rgba(214, 158, 46, 0.3), 0 4px 4px #000;
+        }
+
+        .btn-large {
+            background: linear-gradient(to bottom, #4a5568, #2d3748); color: var(--gold-ruin);
+            border: 2px solid var(--stone-dark); padding: 20px 50px; font-size: 1.5rem;
+            font-weight: 900; border-radius: 8px; cursor: pointer; text-transform: uppercase;
+            letter-spacing: 3px; box-shadow: 0 8px 0 #1a202c, 0 15px 20px rgba(0,0,0,0.8);
+            transition: all 0.1s; margin-top: 30px;
+        }
+        .btn-large:active { transform: translateY(8px); box-shadow: 0 0 0 #1a202c; }
+
+        /* --- DRAFTING SCREEN UI --- */
+        .draft-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 15px; margin-top: 30px; }
+        .draft-btn {
+            padding: 15px 10px; border-radius: 8px; font-weight: 900; color: white; cursor: pointer;
+            text-transform: uppercase; letter-spacing: 2px; border: 4px solid var(--stone-dark); 
+            transition: 0.2s; text-shadow: 1px 2px 4px black; box-shadow: 0 8px 15px rgba(0,0,0,0.5);
+        }
+        .draft-btn:hover { transform: scale(1.05); }
+        .draft-btn:disabled { opacity: 0.3; cursor: not-allowed; transform: none; }
+
+        /* --- GAME UI --- */
+        .dashboard { display: flex; gap: 60px; opacity: 1; transition: opacity 0.5s; z-index: 10; }
+        .board {
+            width: 480px; height: 750px; background: var(--rock-texture); border-radius: 12px;
+            position: relative; box-shadow: inset 0 0 60px rgba(0,0,0,0.9), 0 40px 60px rgba(0,0,0,0.9);
+            transform: rotateX(20deg) translateY(10px); transform-style: preserve-3d;
+            border: 15px solid var(--stone-dark); display: flex; flex-direction: column-reverse; 
+        }
+
+        .zone { flex: 1; border-top: 3px dashed rgba(47, 133, 90, 0.4); position: relative; display: flex; justify-content: center; }
+        .zone:first-child { border-top: none; }
+        .zone-label {
+            position: absolute; left: -90px; bottom: 20px; color: #718096;
+            font-weight: 900; font-size: 1.2rem; transform: rotateX(-20deg); text-transform: uppercase;
+        }
+        .finish-line { background: rgba(214, 158, 46, 0.05); border-top: 4px solid var(--gold-ruin); box-shadow: inset 0 20px 30px rgba(214, 158, 46, 0.1); }
+
+        .tiki {
+            width: 120px; height: 28px; position: absolute; left: 50%; margin-left: -60px; 
+            border-radius: 4px; display: flex; justify-content: center; align-items: center;
+            font-weight: 900; font-size: 0.9rem; text-transform: uppercase; letter-spacing: 2px;
+            box-shadow: 0 8px 15px rgba(0,0,0,0.9), inset 0 2px 4px rgba(255,255,255,0.4);
+            border: 2px solid rgba(0,0,0,0.9); color: white; text-shadow: 1px 1px 3px black;
+        }
+
+        .controls { width: 380px; display: flex; flex-direction: column; gap: 20px; transform: translateZ(40px); }
+        .panel-box {
+            background: rgba(26, 32, 44, 0.85); padding: 25px; border-radius: 12px;
+            border: 2px solid var(--stone-light); box-shadow: 0 20px 40px rgba(0,0,0,0.8);
+            backdrop-filter: blur(10px);
+        }
+        h2 { margin: 0 0 15px 0; color: var(--vine-green); text-transform: uppercase; font-size: 1.1rem;}
+        
+        select {
+            width: 100%; padding: 15px; background: var(--stone-dark); color: var(--gold-ruin);
+            border: 2px solid var(--stone-med); border-radius: 8px; margin-bottom: 15px;
+            font-size: 1.1rem; font-weight: bold; outline: none; cursor: pointer;
+        }
+        .btn-grid { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 10px; }
+        .btn-grid-2 { grid-template-columns: 1fr 1fr; }
+
+        .btn-action {
+            background: linear-gradient(to bottom, var(--stone-light), var(--stone-med));
+            color: white; border: 1px solid var(--stone-dark); padding: 15px 5px;
+            border-radius: 6px; font-weight: 900; cursor: pointer;
+            box-shadow: 0 6px 0 var(--stone-dark), 0 10px 10px rgba(0,0,0,0.5); text-transform: uppercase;
+        }
+        .btn-action:active { transform: translateY(6px); box-shadow: 0 0 0 var(--stone-dark); }
+        .btn-alt { background: linear-gradient(to bottom, #2f855a, #22543d); border-color: #1c4532; box-shadow: 0 6px 0 #1c4532; }
+        .btn-alt:active { box-shadow: 0 0 0 #1c4532; }
+
+        .leaderboard-row { display: flex; justify-content: space-between; padding: 12px; border-bottom: 1px solid var(--stone-med); font-size: 1.3rem; }
+    </style>
+</head>
+<body>
+
+    <div id="start-screen" class="overlay">
+        <div class="modal-box">
+            <h1 class="title-text">Tiki Topple</h1>
+            <p style="color: #a0aec0; font-size: 1.3rem; margin-top: 0;">Ancient Jungle Protocol</p>
+            <button class="btn-large" onclick="startDraft()">Start Game</button>
+        </div>
+    </div>
+
+    <div id="draft-screen" class="overlay hidden">
+        <div class="modal-box" style="width: 500px;">
+            <h1 class="title-text" style="font-size: 2.5rem; margin-bottom: 5px;">Draft Team</h1>
+            <h2 id="draft-status" style="color: var(--accent-glow); margin-top: 0; font-size: 1.5rem;">Player 1: Pick 3</h2>
+            <p style="color: #718096; font-size: 0.9rem; margin-bottom: 0;">Secretly tap the 3 tokens you want to win.</p>
+            <div class="draft-grid" id="draft-grid">
+                </div>
+        </div>
+    </div>
+
+    <div class="dashboard" id="game-ui">
+        <div class="board" id="board-ui"></div>
+
+        <div class="controls">
+            <div class="panel-box" style="text-align: center; border-color: var(--gold-ruin);">
+                <div style="font-size: 1.5rem; font-weight: 900; color: var(--accent-glow);" id="active-player">Player 1</div>
+                <div style="background: var(--stone-dark); color: var(--gold-ruin); padding: 8px; border-radius: 6px; margin-top: 10px; font-weight: bold;" id="turn-counter">Turn: 1 / 10</div>
+            </div>
+
+            <div class="panel-box">
+                <h2>Target Stack Location</h2>
+                <select id="zone-select" onchange="SoundFX.playUI()"></select>
+            </div>
+
+            <div class="panel-box">
+                <h2>Move Forward (PDF 5.3.1)</h2>
+                <div class="btn-grid">
+                    <button class="btn-action" onclick="SoundFX.playUI(); executeMove(1)">Top 1</button>
+                    <button class="btn-action" onclick="SoundFX.playUI(); executeMove(2)">Top 2</button>
+                    <button class="btn-action" onclick="SoundFX.playUI(); executeMove(3)">Top 3</button>
+                </div>
+            </div>
+
+            <div class="panel-box">
+                <h2>Reorder Stack (PDF 5.3.2)</h2>
+                <div class="btn-grid btn-grid-2">
+                    <button class="btn-action btn-alt" onclick="SoundFX.playUI(); executeReorder(2)">Rev Top 2</button>
+                    <button class="btn-action btn-alt" onclick="SoundFX.playUI(); executeReorder(3)">Rev Top 3</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <div id="end-screen" class="overlay hidden">
+        <div class="modal-box" style="width: 550px;">
+            <h1 class="title-text" style="font-size: 3rem;">Game Over</h1>
+            <h2 id="win-reason" style="color: #a0aec0; margin-top: 0; font-size: 1.2rem;"></h2>
+            <div style="background: var(--stone-dark); padding: 20px; border-radius: 10px; margin-top: 30px;" id="final-stats"></div>
+            <button class="btn-large" onclick="location.reload()">Play Again</button>
+        </div>
+    </div>
+
+    <script>
+        // --- SOUND EFFECTS ---
+        const SoundFX = {
+            ctx: null,
+            init: function() {
+                if (!this.ctx) this.ctx = new (window.AudioContext || window.webkitAudioContext)();
+                if (this.ctx.state === 'suspended') this.ctx.resume();
+            },
+            playUI: function() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
+                osc.type = 'sine'; osc.frequency.setValueAtTime(600, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(300, this.ctx.currentTime + 0.1);
+                gain.gain.setValueAtTime(0.2, this.ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.1);
+                osc.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(); osc.stop(this.ctx.currentTime + 0.1);
+            },
+            playStoneThud: function() {
+                if (!this.ctx) return;
+                const osc = this.ctx.createOscillator(); const gain = this.ctx.createGain();
+                osc.type = 'square'; osc.frequency.setValueAtTime(100, this.ctx.currentTime);
+                osc.frequency.exponentialRampToValueAtTime(20, this.ctx.currentTime + 0.3);
+                gain.gain.setValueAtTime(0.5, this.ctx.currentTime); gain.gain.exponentialRampToValueAtTime(0.01, this.ctx.currentTime + 0.3);
+                const filter = this.ctx.createBiquadFilter(); filter.type = 'lowpass'; filter.frequency.value = 400;
+                osc.connect(filter); filter.connect(gain); gain.connect(this.ctx.destination);
+                osc.start(); osc.stop(this.ctx.currentTime + 0.3);
+            }
+        };
+
+        // --- GAME CONFIG & STATE ---
+        const totalZones = 4; 
+        const maxTurns = 10;  
+        let currentTurn = 1;
+        let activePlayer = 1;
+        let isAnimating = false;
+
+        // --- NEW: DRAFTING VARIABLES ---
+        let p1Team = []; // Holds P1's chosen names
+        let p2Team = []; // Holds P2's chosen names
+        let draftingPlayer = 1;
+
+        const allTokens = [
+            { id: 't1', name: 'Akamai', color: '#e53e3e' }, { id: 't2', name: 'Wiki', color: '#ed8936' },
+            { id: 't3', name: 'Nani', color: '#ecc94b' }, { id: 't4', name: 'Kapu', color: '#48bb78' },
+            { id: 't5', name: 'Koa', color: '#38b2ac' }, { id: 't6', name: 'Liko', color: '#4299e1' },
+            { id: 't7', name: 'Mano', color: '#667eea' }, { id: 't8', name: 'Pele', color: '#9f7aea' },
+            { id: 't9', name: 'Hula', color: '#ed64a6' }  
+        ];
+
+        let boardState = [ [...allTokens], [], [], [] ];
+
+        // --- DRAFTING PHASE FUNCTIONS ---
+        function startDraft() {
+            if (document.documentElement.requestFullscreen) {
+                document.documentElement.requestFullscreen().catch(err => console.log(err));
+            }
+            SoundFX.init();
+            document.getElementById('start-screen').classList.add('hidden');
+            document.getElementById('draft-screen').classList.remove('hidden');
+
+            const grid = document.getElementById('draft-grid');
+            grid.innerHTML = '';
+            
+            // Build the selection buttons
+            allTokens.forEach(tiki => {
+                const btn = document.createElement('button');
+                btn.className = 'draft-btn';
+                btn.style.backgroundColor = tiki.color;
+                btn.innerText = tiki.name;
+                btn.onclick = () => selectTiki(tiki, btn);
+                grid.appendChild(btn);
+            });
+        }
+
+        function selectTiki(tiki, btn) {
+            SoundFX.playUI();
+            btn.disabled = true;
+
+            // Assign to current player
+            if (draftingPlayer === 1) {
+                p1Team.push(tiki.name);
+                btn.style.borderColor = 'var(--accent-glow)';
+                
+                if (p1Team.length === 3) {
+                    draftingPlayer = 2; // Switch to P2
+                }
+            } else {
+                p2Team.push(tiki.name);
+                btn.style.borderColor = 'var(--p2-color)';
+                
+                if (p2Team.length === 3) {
+                    // Both teams selected, start game!
+                    setTimeout(() => {
+                        document.getElementById('draft-screen').classList.add('hidden');
+                        initBoard();
+                    }, 500);
+                    return;
+                }
+            }
+
+            // Update Header Text
+            const status = document.getElementById('draft-status');
+            if (draftingPlayer === 1) {
+                status.innerText = `Player 1: Pick ${3 - p1Team.length}`;
+                status.style.color = 'var(--accent-glow)';
+            } else {
+                status.innerText = `Player 2: Pick ${3 - p2Team.length}`;
+                status.style.color = 'var(--p2-color)';
+            }
+        }
+
+        // --- BOARD INITIALIZATION ---
+        function initBoard() {
+            const boardUI = document.getElementById('board-ui');
+            const select = document.getElementById('zone-select');
+
+            for(let i = 0; i < totalZones; i++) {
+                const zone = document.createElement('div');
+                zone.className = `zone ${i === totalZones - 1 ? 'finish-line' : ''}`;
+                
+                const label = document.createElement('div');
+                label.className = 'zone-label';
+                label.innerText = i === totalZones - 1 ? 'RUIN' : `ZONE ${i}`;
+                zone.appendChild(label);
+                boardUI.appendChild(zone);
+
+                const opt = document.createElement('option');
+                opt.value = i;
+                opt.innerText = i === totalZones - 1 ? `Zone ${i} (Ruin)` : `Zone ${i}`;
+                select.appendChild(opt);
+            }
+
+            boardState[0].forEach(token => {
+                const el = document.createElement('div');
+                el.className = 'tiki'; el.id = token.id;
+                el.style.backgroundColor = token.color; el.innerText = token.name;
+                
+                // Show tiny indicator if owned by a player
+                if(p1Team.includes(token.name)) el.style.border = "3px solid var(--accent-glow)";
+                if(p2Team.includes(token.name)) el.style.border = "3px solid var(--p2-color)";
+
+                boardUI.appendChild(el);
+            });
+
+            renderPhysics(false);
+        }
+
+        function renderPhysics(animate = true) {
+            const zoneHeight = 750 / totalZones; 
+            const tokenHeight = 11; 
+
+            boardState.forEach((stack, zoneIndex) => {
+                stack.forEach((token, stackIndex) => {
+                    const baseBottom = (zoneIndex * zoneHeight) + 6; 
+                    const finalBottom = baseBottom + (stackIndex * tokenHeight);
+                    const el = document.getElementById(token.id);
+                    el.style.zIndex = stackIndex; 
+
+                    if (animate) {
+                        anime({ targets: el, bottom: finalBottom, duration: 800, easing: 'easeOutElastic(1, .6)', complete: function(anim) { if(anim.completed) SoundFX.playStoneThud(); } });
+                    } else {
+                        el.style.bottom = `${finalBottom}px`;
+                    }
+                });
+            });
+        }
+
+        async function executeMove(count) {
+            if(isAnimating) return;
+            const zIndex = parseInt(document.getElementById('zone-select').value);
+            if (zIndex === totalZones - 1) return alert("Tokens reached the ruin!");
+            if (boardState[zIndex].length < count) return alert(`Not enough tokens in Zone ${zIndex}.`);
+
+            isAnimating = true;
+            const movingTokens = boardState[zIndex].splice(boardState[zIndex].length - count, count);
+            const domElements = movingTokens.map(t => document.getElementById(t.id));
+
+            anime({ targets: domElements, scale: 1.15, translateY: -20, duration: 300, easing: 'easeOutQuad' });
+            await new Promise(r => setTimeout(r, 350));
+
+            boardState[zIndex + 1] = boardState[zIndex + 1].concat(movingTokens);
+            renderPhysics(true);
+            await new Promise(r => setTimeout(r, 600));
+
+            anime({ targets: domElements, scale: 1, translateY: 0, duration: 300, easing: 'easeInQuad' });
+            await new Promise(r => setTimeout(r, 350));
+            finalizeTurn();
+        }
+
+        async function executeReorder(count) {
+            if(isAnimating) return;
+            const zIndex = parseInt(document.getElementById('zone-select').value);
+            if (boardState[zIndex].length < count) return alert(`Need at least ${count} tokens to reverse.`);
+
+            isAnimating = true;
+            const topTokens = boardState[zIndex].splice(boardState[zIndex].length - count, count);
+            const domElements = topTokens.map(t => document.getElementById(t.id));
+
+            anime({ targets: domElements, translateX: 150, scale: 1.1, duration: 400, easing: 'easeOutExpo' });
+            await new Promise(r => setTimeout(r, 450));
+
+            topTokens.reverse();
+            boardState[zIndex] = boardState[zIndex].concat(topTokens);
+            renderPhysics(true);
+            await new Promise(r => setTimeout(r, 600));
+
+            anime({ targets: domElements, translateX: 0, scale: 1, duration: 400, easing: 'easeOutElastic(1, .8)' });
+            await new Promise(r => setTimeout(r, 450));
+            finalizeTurn();
+        }
+
+        function finalizeTurn() {
+            if (boardState[totalZones - 1].length === 9) return triggerGameOver("All Tokens Reached The Ruin!");
+            if (activePlayer === 2) currentTurn++;
+            if (currentTurn > maxTurns) return triggerGameOver("Time Limit Reached!");
+
+            activePlayer = activePlayer === 1 ? 2 : 1;
+            const pText = document.getElementById('active-player');
+            pText.innerText = `Player ${activePlayer}`;
+            pText.style.color = activePlayer === 1 ? 'var(--accent-glow)' : 'var(--p2-color)';
+            document.getElementById('turn-counter').innerText = `Turn: ${currentTurn} / ${maxTurns}`;
+            isAnimating = false;
+        }
+
+        // --- DYNAMIC ANTI-CHEAT SCORING ---
+        function triggerGameOver(reason) {
+            document.getElementById('win-reason').innerText = reason;
+            document.getElementById('end-screen').classList.remove('hidden');
+
+            let p1Score = 0; let p2Score = 0;
+
+            // Calculate score using the teams selected in the Draft Phase
+            boardState.forEach((stack, zoneIndex) => {
+                stack.forEach((token, stackIndex) => {
+                    let points = (zoneIndex * 10) + stackIndex + 1;
+                    if (p1Team.includes(token.name)) p1Score += points;
+                    if (p2Team.includes(token.name)) p2Score += points;
+                });
+            });
+
+            let winnerText = "";
+            if (p1Score > p2Score) winnerText = "🏆 Player 1 Wins!";
+            else if (p2Score > p1Score) winnerText = "🏆 Player 2 Wins!";
+            else winnerText = "🤝 It's a Tie!";
+
+            let statsHTML = `
+                <h2 style="color: var(--gold-ruin); margin: 0 0 15px 0; font-size: 2.2rem;">${winnerText}</h2>
+                <div class="leaderboard-row">
+                    <span><span style="color:var(--accent-glow)">■</span> Player 1 Score:</span>
+                    <span style="font-weight: 900; font-size: 1.8rem;">${p1Score} pts</span>
+                </div>
+                <div class="leaderboard-row">
+                    <span><span style="color:var(--p2-color)">■</span> Player 2 Score:</span>
+                    <span style="font-weight: 900; font-size: 1.8rem;">${p2Score} pts</span>
+                </div>
+                <div style="margin-top: 25px; font-size: 1rem; color: #a0aec0; text-align: left; background: rgba(0,0,0,0.4); padding: 15px; border-radius: 8px;">
+                    <strong style="color: var(--vine-green);">Drafted Teams:</strong><br><br>
+                    <span style="color: var(--accent-glow);">Player 1:</span> ${p1Team.join(', ')}<br>
+                    <span style="color: var(--p2-color);">Player 2:</span> ${p2Team.join(', ')}<br>
+                    <span style="color: #718096;">Neutral Blocks:</span> Non-scoring obstacles
+                </div>
+            `;
+            document.getElementById('final-stats').innerHTML = statsHTML;
+        }
+    </script>
+</body>
+</html>
